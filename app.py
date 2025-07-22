@@ -130,6 +130,26 @@ def register():
         db.session.commit()
         return redirect(url_for('login'))
     return render_template('signup.html')
+    
+@app.route('/parking',methods=['GET','POST'])
+def parking():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        primary_location_name = request.form['primary_location_name']
+        address = request.form['address']
+        pin_code = request.form['pin_code']
+        price = request.form['price']
+        number_of_spots = request.form['number_of_spots']
+        
+        new_parking = Parking(primary_location_name=primary_location_name, address=address, pin_code=pin_code, price=price, number_of_spots=number_of_spots)
+        db.session.add(new_parking)
+        db.session.commit()
+        
+        return redirect(url_for('parking'))
+    
+    parkings = Parking.query.all()
+    return render_template('parking.html', parkings=parkings)
 
 if __name__=='__main__':
     app.run(debug=True)
