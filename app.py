@@ -135,21 +135,84 @@ def register():
 def parking():
     if 'username' not in session:
         return redirect(url_for('login'))
+    
+    parkings = Parking.query.all()
+    parking_spots = {}
+    available_counts={}
+    for parking in parkings:
+        spots = parkingSpot.query.filter_by(parking_id=parking.id).all()
+        
+        parking_spots[parking.id] = spots
+
+        available_counts[parking.id] = parkingSpot.query.filter_by(parking_id=parking.id, status='A').count()
+
+    return render_template('parking.html', parkings=parkings,available_counts=available_counts,parking_spots=parking_spots)
+
+@app.route('/add_parking',methods=['GET','POST'])
+def add_parking():
+    if 'username' not in session:
+        return redirect(url_for('login'))
     if request.method == 'POST':
         primary_location_name = request.form['primary_location_name']
         address = request.form['address']
         pin_code = request.form['pin_code']
-        price = request.form['price']
+        price =int( request.form['price'])
         number_of_spots = request.form['number_of_spots']
         
         new_parking = Parking(primary_location_name=primary_location_name, address=address, pin_code=pin_code, price=price, number_of_spots=number_of_spots)
         db.session.add(new_parking)
+        db.session.flush()
+        for i in range(1,int(number_of_spots)+1):
+            spot=parkingSpot(parking_id=new_parking.id, spot_number=i, status='A')
+            db.session.add(spot)
         db.session.commit()
-        
         return redirect(url_for('parking'))
-    
-    parkings = Parking.query.all()
-    return render_template('parking.html', parkings=parkings)
+    return redirect(url_for('parking'))
+
+    return render_template('parking.html', parkings=parkings,available_counts=available_counts)
+
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/')
+
+@app.route('/edit_parking/<int:parking_id>', methods=['GET', 'POST'])
+def edit_parking(parking_id):
+    if 'username' not in session or session['username'] != 'admin':
+        return redirect(url_for('login'))
+
+    parking = Parking.query.get_or_404(parking_id)
+
+    if request.method == 'POST':
+        parking.primary_location_name = request.form['primary_location_name']
+        parking.address = request.form['address']
+        parking.pin_code = request.form['pin_code']
+        parking.price = float(request.form['price'])
+        new_spot_count = int(request.form['number_of_spots'])
+
+        # Update number of spots if changed
+        current_spots = {spot.spot_number: spot for spot in parking.spots}
+
+        for i in range(1,new_spot_count + 1):
+            if i not in current_spots:
+                spot=parkingSpot(parking_id=parking.id, spot_number=i,status='A')
+                db.session.add(spot)
+
+        for i in range(new_spot_count+1, len(current_spots)+1):
+            spot=current_spots[i]
+            if spot:
+                has_history=Booking.query.filter_by(spot_id=spot.id).first()
+                if spot.status=='A' and not has_history:
+                    db.session.delete(spot)
+        parking.number_of_spots=new_spot_count
+        db.session.commit()
+        return redirect(url_for('parking'))
+
+    return render_template('edit_parking.html', parking=parking)
+
+
 
 if __name__=='__main__':
     app.run(debug=True)
